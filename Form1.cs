@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
-using System.IO;
 using System.Threading;
 using System.Linq;
 using CrossbarSwitch.Properties;
 using System.ComponentModel;
 using System.Diagnostics;
+using CrossbarSwitch.Object_Classes;
 
 namespace CrossbarSwitch
 {
@@ -44,22 +44,25 @@ namespace CrossbarSwitch
             comboBox4.SelectedItem = 0;
         }
 
+        #region Global Variables
+
         Graphics drawArea;
         Bitmap image;
-        int[] module = new int[8];
         Queue<int> deleteN = new Queue<int>(); // опашка за изтриване
         Queue<int> deleteM = new Queue<int>(); // опашка за изтриване
         Queue<int?> Latency = new Queue<int?>();
         Queue<int> Breadth = new Queue<int>();
         Queue<int> t = new Queue<int>();
-        string B = " ";
         Rectangle R = new Rectangle();
         Requests requests;
-        List<RequestsLasts> lasts;
+        List<RequestLasts> lasts;
         int globalP;
         List<double> BY, LY;
         List<int> PX;
 
+        #endregion
+
+        #region Events
 
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -81,35 +84,19 @@ namespace CrossbarSwitch
             label1.Text = "Честота на генерираните заявки: " + (trackBar1.Value).ToString();
             label10.Text = "Дължина (брой тактове за обслужване) на една заявка в паметта: " + Settings.Default.TactLenght.ToString();
             label8.Text = "Време за визуализация на един такт: " + (trackBar2.Value * 0.001).ToString();
-            radioButton1_CheckedChanged(sender,e);
-            radioButton2_CheckedChanged(sender,e);
+            radioButton1_CheckedChanged(sender, e);
+            radioButton2_CheckedChanged(sender, e);
 
         }
 
         private void pictureBox2_Paint(object sender, PaintEventArgs e)
         {
-            if(image == null)
+            if (image == null)
             {
                 image = new Bitmap(pictureBox2.ClientSize.Width, pictureBox2.ClientSize.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             }
             e.Graphics.DrawImage(image, 0, 0, image.Width, image.Height);
         }
-
-        void procedureBeforeGeneratingRequest(int memoryId)
-        {
-            if (Settings.Default.Visualisation)
-            {
-                generateRequests(memoryId);
-            }
-            requests.Memories[memoryId].Busy = true;
-            requests.Memories[memoryId].TactsLeftToRelease--;
-        }
-
-        int getSteps()
-        {
-            return requests.Tact;
-        }
-
 
         private void button1_Click(object sender, EventArgs e)
         {
@@ -119,7 +106,7 @@ namespace CrossbarSwitch
                     dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Clear()));
                 else dataGridView1.Rows.Clear();
 
-                if(sender.GetType().Name != "BackgroundWorker")
+                if (sender.GetType().Name != "BackgroundWorker")
                 {
                     dataGridView1.Visible = false;
                     pictureBox2.Visible = true;
@@ -138,9 +125,9 @@ namespace CrossbarSwitch
                 cpus.Add(new CPU(i + 1, false, null));
             }
             requests = new Requests(cpus, memories);
-            lasts = new List<RequestsLasts>();
+            lasts = new List<RequestLasts>();
             drawArea = Graphics.FromImage(image);
-            deleteN.Clear(); 
+            deleteN.Clear();
             deleteM.Clear(); Latency.Clear(); Breadth.Clear(); t.Clear();
             drawArea.Clear(pictureBox2.BackColor);
 
@@ -151,7 +138,7 @@ namespace CrossbarSwitch
 
             cpu = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
             mem = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
-                
+
 
             if ((cpu == 0) || (mem == 0))
             {
@@ -186,9 +173,9 @@ namespace CrossbarSwitch
                     }
                 }
                 drawFont = new Font("Arial Narrow", 13, FontStyle.Bold);
-                drawArea.DrawString("CPU REQ", drawFont, drawBrush, y / 2 + x0 - 10 + (m-1) * y + 40, y0 - 35);
+                drawArea.DrawString("CPU REQ", drawFont, drawBrush, y / 2 + x0 - 10 + (m - 1) * y + 40, y0 - 35);
                 drawFont = new Font("Arial Narrow", 8, FontStyle.Bold);
-                drawArea.DrawString("COUNT", drawFont, drawBrush, y / 2 + x0 - 10 + (m-1) * y + 100, y0 - 20);
+                drawArea.DrawString("COUNT", drawFont, drawBrush, y / 2 + x0 - 10 + (m - 1) * y + 100, y0 - 20);
                 if (Settings.Default.StepMode && sender.GetType().Name != "BackgroundWorker")
                 {
                     button7.Visible = true;
@@ -198,87 +185,86 @@ namespace CrossbarSwitch
             pictureBox2.Invalidate();
         }
 
-
         private void button2_Click(object sender, EventArgs e)
         {
-                int cpuCount = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
-                int memCount = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
+            int cpuCount = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
+            int memCount = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
 
-            
-                Random rnd = new Random();
 
-                for (int i = 0; i < cpuCount; i++)
+            Random rnd = new Random();
+
+            for (int i = 0; i < cpuCount; i++)
+            {
+                if (!requests.CPUs[i].Busy)
                 {
-                    if (!requests.CPUs[i].Busy)
+                    requests.CPUs[i].MemoryId = (requests.CPUs[i].Busy = rnd.Next(100) < ((!Settings.Default.Visualisation && Settings.Default.AutoMode) ? globalP : Settings.Default.GenReq) ? true : false) ? rnd.Next(0, memCount) : default(int);
+                    if (requests.CPUs[i].Busy)
                     {
-                        requests.CPUs[i].MemoryId = (requests.CPUs[i].Busy = rnd.Next(100) < ((!Settings.Default.Visualisation && Settings.Default.AutoMode) ? globalP : Settings.Default.GenReq) ? true : false) ? rnd.Next(0, memCount) : default(int);
-                        if (requests.CPUs[i].Busy)
+                        int memId = requests.CPUs[i].MemoryId.GetValueOrDefault();
+                        lasts.Add(new RequestLasts(lasts.Count + 1, 0, i, false));
+                        requests.Memories[memId].Busy = true;
+                        if (requests.Memories[memId].TactsLeftToRelease == default(int)
+                            && requests.Memories[memId].WaitingProcessors.Count == default(int))
                         {
-                            int memId = requests.CPUs[i].MemoryId.GetValueOrDefault();
-                            lasts.Add(new RequestsLasts(lasts.Count + 1, 0, i, false));
-                            requests.Memories[memId].Busy = true;
-                            if (requests.Memories[memId].TactsLeftToRelease == default(int)
-                                && requests.Memories[memId].WaitingProcessors.Count == default(int))
-                            {
-                                requests.Memories[memId].TactsLeftToRelease = Settings.Default.TactLenght;
-                            }
-                            requests.Memories[memId].WaitingProcessors.Add(i);
+                            requests.Memories[memId].TactsLeftToRelease = Settings.Default.TactLenght;
                         }
-                    }
-                    else
-                    {
-                        lasts.AsQueryable().Where(l => l.CPUId == i && l.done == false).Single().TactsLast++;
+                        requests.Memories[memId].WaitingProcessors.Add(i);
                     }
                 }
-           
+                else
+                {
+                    lasts.AsQueryable().Where(l => l.CPUId == i && l.Done == false).Single().TactsLast++;
+                }
+            }
+
 
 
             double p = ((!Settings.Default.Visualisation && Settings.Default.AutoMode) ? globalP : Settings.Default.GenReq) * 0.1;
-                int B;
+            int B;
 
-                B = requests.Memories.AsQueryable().Where(m => m.Busy == true).Count();
+            B = requests.Memories.AsQueryable().Where(m => m.Busy == true).Count();
 
-                //L = Convert.ToInt32((1 - pA) / pA);
-                Breadth.Enqueue(B);
-                //Latency.Enqueue(L);
-                t.Enqueue(getSteps() + 1);
-      
-                for (int i = 0; i < memCount; i++)
+            //L = Convert.ToInt32((1 - pA) / pA);
+            Breadth.Enqueue(B);
+            //Latency.Enqueue(L);
+            t.Enqueue(getSteps() + 1);
+
+            for (int i = 0; i < memCount; i++)
+            {
+                if (requests.Memories[i].WaitingProcessors.Count > default(int))
                 {
-                    if (requests.Memories[i].WaitingProcessors.Count > default(int))
+                    if (requests.Memories[i].TactsLeftToRelease != default(int))
                     {
-                        if (requests.Memories[i].TactsLeftToRelease != default(int))
-                        {
                         procedureBeforeGeneratingRequest(i);
-                        }
-                        else
+                    }
+                    else
+                    {
+                        requests.Memories[i].Busy = false;
+                        int cpuId = requests.Memories[i].WaitingProcessors[0];
+                        requests.CPUs[cpuId].Busy = false;
+                        lasts.AsQueryable().Where(l => l.CPUId == cpuId && l.Done == false).Single().Done = true;
+                        if (Settings.Default.Visualisation)
                         {
-                            requests.Memories[i].Busy = false;
-                            int cpuId = requests.Memories[i].WaitingProcessors[0];
-                            requests.CPUs[cpuId].Busy = false;
-                            lasts.AsQueryable().Where(l => l.CPUId == cpuId && l.done == false).Single().done = true;
-                            if(Settings.Default.Visualisation) 
-                            {
-                                deleteRequests(i);
-                            }
-                            requests.Memories[i].WaitingProcessors.RemoveAt(0);
-                            requests.Memories[i].TactsLeftToRelease = Settings.Default.TactLenght;
+                            deleteRequests(i);
+                        }
+                        requests.Memories[i].WaitingProcessors.RemoveAt(0);
+                        requests.Memories[i].TactsLeftToRelease = Settings.Default.TactLenght;
 
-                            if (requests.Memories[i].WaitingProcessors.Count > default(int))
-                            {
-                                procedureBeforeGeneratingRequest(i);
-                            }
+                        if (requests.Memories[i].WaitingProcessors.Count > default(int))
+                        {
+                            procedureBeforeGeneratingRequest(i);
                         }
                     }
-
                 }
+
+            }
             requests.Tact++;
-                if (InvokeRequired)
-                    label11.Invoke((MethodInvoker)(() => label11.Text = requests.Tact.ToString() + ". такт"));
-                else label11.Text = requests.Tact.ToString() + ". такт";
-           
-                
-           
+            if (InvokeRequired)
+                label11.Invoke((MethodInvoker)(() => label11.Text = requests.Tact.ToString() + ". такт"));
+            else label11.Text = requests.Tact.ToString() + ". такт";
+
+
+
         }
 
         private void button3_Click(object sender, EventArgs e)
@@ -324,10 +310,10 @@ namespace CrossbarSwitch
                 {
                     button4_Click_1(sender, e);
                 }
-                    trackBar1.Enabled = true;
-                    trackBar3.Enabled = true;
-                    label2.Text = "0 /";
-                
+                trackBar1.Enabled = true;
+                trackBar3.Enabled = true;
+                label2.Text = "0 /";
+
             }
             else { MessageBox.Show("Въведете време за моделиране!", "Некоректни входни данни!"); }
         }
@@ -352,7 +338,7 @@ namespace CrossbarSwitch
             {
                 backgroundWorker2.RunWorkerAsync();
             }
-            else if(!backgroundWorker1.IsBusy)
+            else if (!backgroundWorker1.IsBusy)
             {
                 backgroundWorker1.RunWorkerAsync();
             }
@@ -371,7 +357,38 @@ namespace CrossbarSwitch
         private void button5_Click(object sender, EventArgs e) // изход
         {
             this.Close();
-        }   
+        }
+
+        private void button6_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("© 2022 Георги Георгиев.\n\nmaymi5@abv.bg\n___________________________\n ТУ-Варна", "Product licence information");
+        }
+
+        private void button7_Click_1(object sender, EventArgs e)
+        {
+            drawArea = Graphics.FromImage(image);
+            deleteN.Clear();
+            deleteM.Clear(); Latency.Clear(); Breadth.Clear(); t.Clear();
+            drawArea.Clear(pictureBox2.BackColor);
+            button7.Visible = false;
+            button2.Visible = false;
+            label11.Text = " ";
+            dataGridView1.Visible = false;
+            Refresh();
+        }
+
+        private void button8_Click(object sender, EventArgs e)
+        {
+            HelpForm helpForm = new HelpForm();
+            helpForm.ShowDialog();
+
+
+        }
+
+        private void button9_Click(object sender, EventArgs e)
+        {
+            button9.Visible = false;
+        }
 
         private void trackBar1_Scroll(object sender, EventArgs e)
         {
@@ -450,7 +467,7 @@ namespace CrossbarSwitch
                 {
                     trackBar1.Enabled = false;
                 }
-               
+
             }
             else
             {
@@ -458,24 +475,6 @@ namespace CrossbarSwitch
             }
             Properties.Settings.Default.Save();
             Properties.Settings.Default.Upgrade();
-        }
-
-        private void button6_Click(object sender, EventArgs e)
-        {
-            MessageBox.Show("© 2022 Георги Георгиев.\n\nmaymi5@abv.bg\n___________________________\n ТУ-Варна", "Product licence information");
-        }
-
-        private void button7_Click_1(object sender, EventArgs e)
-        {
-            drawArea = Graphics.FromImage(image);
-            deleteN.Clear(); 
-            deleteM.Clear(); Latency.Clear(); Breadth.Clear(); t.Clear();
-            drawArea.Clear(pictureBox2.BackColor);
-            button7.Visible = false;
-            button2.Visible = false;
-            label11.Text = " ";
-            dataGridView1.Visible = false;
-            Refresh();
         }
 
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
@@ -529,201 +528,29 @@ namespace CrossbarSwitch
             Settings.Default.Save();
             Settings.Default.Upgrade();
         }
-       
-        private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
-        {
-            int p = 0, stepsCounter = 0;
-            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
-            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
-            List<Memory> memories = new List<Memory>();
-            List<CPU> cpus = new List<CPU>();
-            for (int i = 0; i < m; i++) //initialize memory count
-            {
-                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
-            }
-            for (int i = 0; i < n; i++) // initialize processor count
-            {
-                cpus.Add(new CPU(i + 1, false, null));
-            }
-            lasts = new List<RequestsLasts>();
-            requests = new Requests(cpus, memories);
-            BY = new List<double>();
-            LY = new List<double>();
-            PX = new List<int>();
-            backgroundWorker1.ReportProgress(p+1);// passes out the progress about the simulation
 
-            button1_Click(sender, e);
-            bool isStopped = false;
-            if (InvokeRequired)
-                button9.Invoke((MethodInvoker)(() => button9.Visible = true));
-            else button9.Visible = true;
-            do
+        #endregion
+
+        #region Basic Functions
+
+        private void procedureBeforeGeneratingRequest(int memoryId)
+        {
+            if (Settings.Default.Visualisation)
             {
-                var sw = Stopwatch.StartNew();
-                try
-                {
-                    globalP = p+1;
-                if (InvokeRequired)
-                    button9.Invoke((MethodInvoker)(() => isStopped = button9.Visible ? false : true));
-                else isStopped = button9.Visible ? false : true;
-                button2_Click(sender, e);
-                stepsCounter++;
-                int time = int.Parse(Settings.Default.ModTime);
-                if (stepsCounter == time)
-                {
-                    p++;
-                    backgroundWorker1.ReportProgress(p+1);
-                    stepsCounter = 0;
-                    lasts.Sort((u, y) => u.TactsLast.CompareTo(y.TactsLast));
-                    double bAvr = Math.Round((double)Breadth.AsQueryable().Average(), 2);
-                    double lAvr;
-                    if (lasts.Count <= 0)
-                    {
-                        lAvr = 0.0;
-                    }
-                    else
-                    {
-                        lAvr = Math.Round((double)lasts?.AsQueryable().Average(item => item.TactsLast), 2);
-                    }
-                    PX.Add(p);
-                    BY.Add(bAvr);
-                    LY.Add(lAvr);
-                    
-                    var input = new object[] { p,
-                                bAvr,
-                                lasts.AsQueryable().Count(),
-                                lasts.AsQueryable().Where(l => l.done).Count(),
-                                (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.done).First().TactsLast,
-                                (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.done).Last().TactsLast,
-                                lAvr };
-                    if (this.InvokeRequired)
-                        dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Add(input)));
-                    else dataGridView1.Rows.Add(input);
-                    memories = new List<Memory>();
-                    cpus = new List<CPU>();
-                    for (int i = 0; i < m; i++) //инициализира броя памети
-                    {
-                        memories.Add(new Memory(i + 1, 0, false, new List<int>()));
-                    }
-                    for (int i = 0; i < n; i++) //инициализира броя памети
-                    {
-                        cpus.Add(new CPU(i + 1, false, null));
-                    }
-                    lasts = new List<RequestsLasts>();
-                    requests = new Requests(cpus, memories);
-                    Breadth.Clear();
-                }
-             }
-            finally
-                {
-                    sw.Stop();
-                    Debug.WriteLine($"Took {sw.ElapsedMilliseconds}");
-                }
-            } while (p < 10 && !isStopped);
+                generateRequests(memoryId);
+            }
+            requests.Memories[memoryId].Busy = true;
+            requests.Memories[memoryId].TactsLeftToRelease--;
         }
 
-        private void backgroundWorker1_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        private int getSteps()
         {
-            label16.Visible = true;
-            if(e.ProgressPercentage == 11)
-            {
-                label16.Visible = false;
-            }
-            label16.Text = "Правят се изчисления с честота на генерираните заявки: " + e.ProgressPercentage.ToString();
-        }
-
-        private void backgroundWorker1_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
-        {
-            if (e.Error == null)
-            {
-                panel2.Enabled = true;
-                panel3.Enabled = true;
-                dataGridView1.Enabled = true;
-                pictureBox1.Visible = false;
-                label16.Visible = false;
-                DisplayChart();
-            }
-
-        }
-
-        private void backgroundWorker2_DoWork(object sender, DoWorkEventArgs e)
-        {
-            int stepsCounter = 0;
-            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
-            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
-            List<Memory> memories = new List<Memory>();
-            List<CPU> cpus = new List<CPU>();
-            for (int i = 0; i < m; i++) //инициализира броя памети
-            {
-                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
-            }
-            for (int i = 0; i < n; i++) //инициализира броя памети
-            {
-                cpus.Add(new CPU(i + 1, false, null));
-            }
-            lasts = new List<RequestsLasts>();
-            backgroundWorker2.ReportProgress(Settings.Default.GenReq);
-            int time = Settings.Default.StepMode ? requests.Tact : int.Parse(Settings.Default.ModTime);
-            button1_Click(sender, e);
-            requests = new Requests(cpus, memories);
-            while (stepsCounter < time)
-            {
-                button2_Click(sender, e);
-                stepsCounter++;
-                if(stepsCounter == time)
-                {
-                    lasts.Sort((u, y) => u.TactsLast.CompareTo(y.TactsLast));
-                    var input = new object[] { Settings.Default.GenReq,
-                            Math.Round((double)Breadth.AsQueryable().Average(), 2),
-                            lasts.AsQueryable().Count(),
-                            lasts.AsQueryable().Where(l => l.done).Count(),
-                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.done).First().TactsLast,
-                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.done).Last().TactsLast,
-                            (lasts.Count <= 0) ? 0 : Math.Round((double)lasts.AsQueryable().Average(item => item.TactsLast), 2) };
-                    if (this.InvokeRequired)
-                        dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Add(input)));
-                    else dataGridView1.Rows.Add(input);
-                    lasts = new List<RequestsLasts>();
-                    requests = new Requests(cpus, memories);
-                    Breadth.Clear();
-                }    
-            }
-        }
-
-        private void backgroundWorker2_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
-        {
-            if (e.Error == null)
-            {
-                panel2.Enabled = true;
-                panel3.Enabled = true;
-                dataGridView1.Enabled = true;
-                pictureBox1.Visible = false;
-                label16.Visible = false;
-            }
-        }
-
-        private void backgroundWorker2_ProgressChanged(object sender, ProgressChangedEventArgs e)
-        {
-            label16.Visible = true;
-            label16.Text = "Правят се изчисления с честота на генерираните заявки: " + e.ProgressPercentage.ToString();
-        }
-
-        private void button8_Click(object sender, EventArgs e)
-        {
-            HelpForm helpForm = new HelpForm();
-            helpForm.ShowDialog();
-           
-            
-        }
-
-        private void button9_Click(object sender, EventArgs e)
-        {
-            button9.Visible = false;
+            return requests.Tact;
         }
 
         private void DisplayChart()
         {
-            if (PX.Count> default(int))
+            if (PX.Count > default(int))
             {
                 foreach (var series in chart1.Series)
                 {
@@ -795,7 +622,7 @@ namespace CrossbarSwitch
 
             if (requests.Memories[memoryId].WaitingProcessors.Count > 1) // ако има конфликт
             {
-                n = requests.Memories[memoryId].WaitingProcessors[requests.Memories[memoryId].WaitingProcessors.Count-1];
+                n = requests.Memories[memoryId].WaitingProcessors[requests.Memories[memoryId].WaitingProcessors.Count - 1];
 
                 drawArea.DrawLine(redPen, x0, y0 + x / 2 + n * x, x0 + memoryId * y + y / 2, y0 + x / 2 + n * x);
                 R.X = x0 + memoryId * y + y / 2 - 3;
@@ -807,7 +634,7 @@ namespace CrossbarSwitch
 
             if (lasts.Count > default(int))
             {
-                
+
                 List<Tuple<int, int>> counts = new List<Tuple<int, int>>();
                 int m = requests.Memories.Count;
                 foreach (var el in lasts.AsQueryable().GroupBy(l => l.CPUId))
@@ -816,9 +643,9 @@ namespace CrossbarSwitch
                     drawArea.FillRectangle(new SolidBrush(Color.White), new Rectangle(x0 + m * y - y / 4 + 1, y0 + el.Key * x + 1, 59, 24));
                     drawArea.DrawString(lasts.AsQueryable().Where(l => l.CPUId == el.Key).Count().ToString(), drawFont, drawBrush, x0 + m * y - y / 4, y0 + el.Key * x);
                 }
-                
+
             }
-                pictureBox2.Invalidate();
+            pictureBox2.Invalidate();
         }
 
         private void deleteRequests(int memoryId)
@@ -849,9 +676,10 @@ namespace CrossbarSwitch
             drawArea.DrawLine(blackPen, x0, y0 + x / 2 + n * x, x0 + m * y + y / 2 + (m + 1 == requests.Memories.Count ? 0 : 4), y0 + x / 2 + n * x);
             drawArea.DrawLine(blackPen, x0 + m * y + y / 2, y0 + 0, x0 + m * y + y / 2, y0 + x / 2 + n * x + (n + 1 == n1 ? 0 : 4));
 
-            for (int i = 1; i < requests.Memories[memoryId].WaitingProcessors.Count; i++){
+            for (int i = 1; i < requests.Memories[memoryId].WaitingProcessors.Count; i++)
+            {
                 n = requests.Memories[memoryId].WaitingProcessors[i];
-                drawArea.DrawLine(redPen, x0, y0 + x / 2 + n * x, x0 + memoryId * y + y / 2, y0 + x / 2 + n * x); 
+                drawArea.DrawLine(redPen, x0, y0 + x / 2 + n * x, x0 + memoryId * y + y / 2, y0 + x / 2 + n * x);
                 R.X = x0 + memoryId * y + y / 2 - 3;
                 R.Y = y0 + x / 2 + n * x - 3;
                 R.Width = 6;
@@ -860,76 +688,190 @@ namespace CrossbarSwitch
             }
             pictureBox2.Invalidate();
         }
-    }
 
-    class Requests
-    {
-        public int Tact;
-        public List<Memory> Memories;
-        public List<CPU> CPUs;
+        #endregion
 
-        public Requests()
+        #region BackGroundWorkers
+
+        private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
         {
+            int p = 0, stepsCounter = 0;
+            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
+            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
+            List<Memory> memories = new List<Memory>();
+            List<CPU> cpus = new List<CPU>();
+            for (int i = 0; i < m; i++) //initialize memory count
+            {
+                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
+            }
+            for (int i = 0; i < n; i++) // initialize processor count
+            {
+                cpus.Add(new CPU(i + 1, false, null));
+            }
+            lasts = new List<RequestLasts>();
+            requests = new Requests(cpus, memories);
+            BY = new List<double>();
+            LY = new List<double>();
+            PX = new List<int>();
+            backgroundWorker1.ReportProgress(p + 1);// passes out the progress about the simulation
+
+            button1_Click(sender, e);
+            bool isStopped = false;
+            if (InvokeRequired)
+                button9.Invoke((MethodInvoker)(() => button9.Visible = true));
+            else button9.Visible = true;
+            do
+            {
+                var sw = Stopwatch.StartNew();
+                try
+                {
+                    globalP = p + 1;
+                    if (InvokeRequired)
+                        button9.Invoke((MethodInvoker)(() => isStopped = button9.Visible ? false : true));
+                    else isStopped = button9.Visible ? false : true;
+                    button2_Click(sender, e);
+                    stepsCounter++;
+                    int time = int.Parse(Settings.Default.ModTime);
+                    if (stepsCounter == time)
+                    {
+                        p++;
+                        backgroundWorker1.ReportProgress(p + 1);
+                        stepsCounter = 0;
+                        lasts.Sort((u, y) => u.TactsLast.CompareTo(y.TactsLast));
+                        double bAvr = Math.Round((double)Breadth.AsQueryable().Average(), 2);
+                        double lAvr;
+                        if (lasts.Count <= 0)
+                        {
+                            lAvr = 0.0;
+                        }
+                        else
+                        {
+                            lAvr = Math.Round((double)lasts?.AsQueryable().Average(item => item.TactsLast), 2);
+                        }
+                        PX.Add(p);
+                        BY.Add(bAvr);
+                        LY.Add(lAvr);
+
+                        var input = new object[] { p,
+                                bAvr,
+                                lasts.AsQueryable().Count(),
+                                lasts.AsQueryable().Where(l => l.Done).Count(),
+                                (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).First().TactsLast,
+                                (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).Last().TactsLast,
+                                lAvr };
+                        if (this.InvokeRequired)
+                            dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Add(input)));
+                        else dataGridView1.Rows.Add(input);
+                        memories = new List<Memory>();
+                        cpus = new List<CPU>();
+                        for (int i = 0; i < m; i++) //инициализира броя памети
+                        {
+                            memories.Add(new Memory(i + 1, 0, false, new List<int>()));
+                        }
+                        for (int i = 0; i < n; i++) //инициализира броя памети
+                        {
+                            cpus.Add(new CPU(i + 1, false, null));
+                        }
+                        lasts = new List<RequestLasts>();
+                        requests = new Requests(cpus, memories);
+                        Breadth.Clear();
+                    }
+                }
+                finally
+                {
+                    sw.Stop();
+                    Debug.WriteLine($"Took {sw.ElapsedMilliseconds}");
+                }
+            } while (p < 10 && !isStopped);
+        }
+
+        private void backgroundWorker2_DoWork(object sender, DoWorkEventArgs e)
+        {
+            int stepsCounter = 0;
+            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
+            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
+            List<Memory> memories = new List<Memory>();
+            List<CPU> cpus = new List<CPU>();
+            for (int i = 0; i < m; i++) //инициализира броя памети
+            {
+                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
+            }
+            for (int i = 0; i < n; i++) //инициализира броя памети
+            {
+                cpus.Add(new CPU(i + 1, false, null));
+            }
+            lasts = new List<RequestLasts>();
+            backgroundWorker2.ReportProgress(Settings.Default.GenReq);
+            int time = Settings.Default.StepMode ? requests.Tact : int.Parse(Settings.Default.ModTime);
+            button1_Click(sender, e);
+            requests = new Requests(cpus, memories);
+            while (stepsCounter < time)
+            {
+                button2_Click(sender, e);
+                stepsCounter++;
+                if (stepsCounter == time)
+                {
+                    lasts.Sort((u, y) => u.TactsLast.CompareTo(y.TactsLast));
+                    var input = new object[] { Settings.Default.GenReq,
+                            Math.Round((double)Breadth.AsQueryable().Average(), 2),
+                            lasts.AsQueryable().Count(),
+                            lasts.AsQueryable().Where(l => l.Done).Count(),
+                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).First().TactsLast,
+                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).Last().TactsLast,
+                            (lasts.Count <= 0) ? 0 : Math.Round((double)lasts.AsQueryable().Average(item => item.TactsLast), 2) };
+                    if (this.InvokeRequired)
+                        dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Add(input)));
+                    else dataGridView1.Rows.Add(input);
+                    lasts = new List<RequestLasts>();
+                    requests = new Requests(cpus, memories);
+                    Breadth.Clear();
+                }
+            }
+        }
+
+        private void backgroundWorker1_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        {
+            label16.Visible = true;
+            if (e.ProgressPercentage == 11)
+            {
+                label16.Visible = false;
+            }
+            label16.Text = "Правят се изчисления с честота на генерираните заявки: " + e.ProgressPercentage.ToString();
+        }
+
+        private void backgroundWorker1_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (e.Error == null)
+            {
+                panel2.Enabled = true;
+                panel3.Enabled = true;
+                dataGridView1.Enabled = true;
+                pictureBox1.Visible = false;
+                label16.Visible = false;
+                DisplayChart();
+            }
 
         }
-        public Requests(List<CPU> cpus, List<Memory> memories)
+
+        private void backgroundWorker2_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
-            CPUs = cpus;
-            Memories = memories;
-        }
-    }
-
-    class Memory
-    {
-        public int Id;
-        public int? TactsLeftToRelease;
-        public bool Busy;
-        public List<int> WaitingProcessors;
-
-        public Memory(int id, int? tactOfRelease, bool busy, List<int> waitingProcessors)
-        {
-            Id = id;
-            TactsLeftToRelease = tactOfRelease;
-            Busy = busy;
-            WaitingProcessors = waitingProcessors;
-        }
-    }
-
-    class CPU
-    {
-        public int Id;
-        public bool Busy;
-        public int? MemoryId;
-
-        public CPU(int id, bool busy, int? memory)
-        {
-            Id = id;
-            Busy = busy;
-            MemoryId = memory;
-        }
-    }
-
-    class RequestsLasts
-    {
-        public int Id;
-        public int TactsLast;
-        public int CPUId;
-        public bool done;
-
-        public RequestsLasts()
-        {
+            if (e.Error == null)
+            {
+                panel2.Enabled = true;
+                panel3.Enabled = true;
+                dataGridView1.Enabled = true;
+                pictureBox1.Visible = false;
+                label16.Visible = false;
+            }
         }
 
-        public RequestsLasts(int id, int tactsLast, int cPUId)
+        private void backgroundWorker2_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
-            Id = id;
-            TactsLast = tactsLast;
-            CPUId = cPUId;
+            label16.Visible = true;
+            label16.Text = "Правят се изчисления с честота на генерираните заявки: " + e.ProgressPercentage.ToString();
         }
 
-        public RequestsLasts(int id, int tactsLast, int cPUId, bool done) : this(id, tactsLast, cPUId)
-        {
-            this.done = done;
-        }
+        #endregion
+
     }
 }

@@ -61,6 +61,10 @@
     <Compile Include="HelpForm.Designer.cs">
       <DependentUpon>HelpForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Object Classes\CPU.cs" />
+    <Compile Include="Object Classes\Memory.cs" />
+    <Compile Include="Object Classes\RequestLasts.cs" />
+    <Compile Include="Object Classes\Requests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
@@ -127,6 +131,7 @@
   <ItemGroup>
     <None Include="Resources\stop.png" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
