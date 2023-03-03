@@ -97,7 +97,10 @@ namespace CrossbarSwitch
 
         void procedureBeforeGeneratingRequest(int memoryId)
         {
-            generateRequests(memoryId);
+            if (Settings.Default.Visualisation)
+            {
+                generateRequests(memoryId);
+            }
             requests.Memories[memoryId].Busy = true;
             requests.Memories[memoryId].TactsLeftToRelease--;
         }
@@ -198,11 +201,10 @@ namespace CrossbarSwitch
 
         private void button2_Click(object sender, EventArgs e)
         {
-            //var sw = Stopwatch.StartNew();
                 int cpuCount = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
                 int memCount = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
 
-          
+            
                 Random rnd = new Random();
 
                 for (int i = 0; i < cpuCount; i++)
@@ -240,8 +242,7 @@ namespace CrossbarSwitch
                 Breadth.Enqueue(B);
                 //Latency.Enqueue(L);
                 t.Enqueue(getSteps() + 1);
-          //try
-          //  {
+      
                 for (int i = 0; i < memCount; i++)
                 {
                     if (requests.Memories[i].WaitingProcessors.Count > default(int))
@@ -256,7 +257,7 @@ namespace CrossbarSwitch
                             int cpuId = requests.Memories[i].WaitingProcessors[0];
                             requests.CPUs[cpuId].Busy = false;
                             lasts.AsQueryable().Where(l => l.CPUId == cpuId && l.done == false).Single().done = true;
-                            if(sender.GetType().Name != "BackgroundWorker") 
+                            if(Settings.Default.Visualisation) 
                             {
                                 deleteRequests(i);
                             }
@@ -265,32 +266,19 @@ namespace CrossbarSwitch
 
                             if (requests.Memories[i].WaitingProcessors.Count > default(int))
                             {
-                            var sw = Stopwatch.StartNew();
-                            try
-                            {
                                 procedureBeforeGeneratingRequest(i);
                             }
-                            finally
-                            {
-                                sw.Stop();
-                                Debug.WriteLine($"Took {sw.ElapsedMilliseconds}");
-                            }
-                        }
                         }
                     }
 
                 }
-            //}
-            //finally
-            //{
-            //    sw.Stop();
-            //    Debug.WriteLine($"Took {sw.ElapsedMilliseconds}");
-            //}
             requests.Tact++;
                 if (InvokeRequired)
                     label11.Invoke((MethodInvoker)(() => label11.Text = requests.Tact.ToString() + ". такт"));
                 else label11.Text = requests.Tact.ToString() + ". такт";
-          
+           
+                
+           
         }
 
         private void button3_Click(object sender, EventArgs e)
@@ -549,11 +537,11 @@ namespace CrossbarSwitch
             int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
             List<Memory> memories = new List<Memory>();
             List<CPU> cpus = new List<CPU>();
-            for (int i = 0; i < m; i++) //инициализира броя памети
+            for (int i = 0; i < m; i++) //initialize memory count
             {
                 memories.Add(new Memory(i + 1, 0, false, new List<int>()));
             }
-            for (int i = 0; i < n; i++) //инициализира броя памети
+            for (int i = 0; i < n; i++) // initialize processor count
             {
                 cpus.Add(new CPU(i + 1, false, null));
             }
@@ -562,7 +550,7 @@ namespace CrossbarSwitch
             BY = new List<double>();
             LY = new List<double>();
             PX = new List<int>();
-            backgroundWorker1.ReportProgress(p+1);
+            backgroundWorker1.ReportProgress(p+1);// passes out the progress about the simulation
 
             button1_Click(sender, e);
             bool isStopped = false;
@@ -571,7 +559,10 @@ namespace CrossbarSwitch
             else button9.Visible = true;
             do
             {
-                globalP = p+1;
+                var sw = Stopwatch.StartNew();
+                try
+                {
+                    globalP = p+1;
                 if (InvokeRequired)
                     button9.Invoke((MethodInvoker)(() => isStopped = button9.Visible ? false : true));
                 else isStopped = button9.Visible ? false : true;
@@ -621,6 +612,12 @@ namespace CrossbarSwitch
                     lasts = new List<RequestsLasts>();
                     requests = new Requests(cpus, memories);
                     Breadth.Clear();
+                }
+             }
+            finally
+                {
+                    sw.Stop();
+                    Debug.WriteLine($"Took {sw.ElapsedMilliseconds}");
                 }
             } while (p < 10 && !isStopped);
         }
