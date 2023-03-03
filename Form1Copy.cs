@@ -1,4 +1,4 @@
-п»їusing System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -48,8 +48,8 @@ namespace CrossbarSwitch
 
         Graphics drawArea;
         Bitmap image;
-        Queue<int> deleteN = new Queue<int>(); // РѕРїР°С€РєР° Р·Р° РёР·С‚СЂРёРІР°РЅРµ
-        Queue<int> deleteM = new Queue<int>(); // РѕРїР°С€РєР° Р·Р° РёР·С‚СЂРёРІР°РЅРµ
+        Queue<int> deleteN = new Queue<int>(); // опашка за изтриване
+        Queue<int> deleteM = new Queue<int>(); // опашка за изтриване
         Queue<int?> Latency = new Queue<int?>();
         Queue<int> Breadth = new Queue<int>();
         Queue<int> t = new Queue<int>();
@@ -59,8 +59,6 @@ namespace CrossbarSwitch
         int globalP;
         List<double> BY, LY;
         List<int> PX;
-        List<Memory> memories;
-        List<CPU> cpus;
 
         #endregion
 
@@ -83,9 +81,9 @@ namespace CrossbarSwitch
             {
                 image = new Bitmap(pictureBox2.ClientSize.Width, pictureBox2.ClientSize.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             }
-            label1.Text = "Р§РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё: " + (trackBar1.Value).ToString();
-            label10.Text = "Р”СЉР»Р¶РёРЅР° (Р±СЂРѕР№ С‚Р°РєС‚РѕРІРµ Р·Р° РѕР±СЃР»СѓР¶РІР°РЅРµ) РЅР° РµРґРЅР° Р·Р°СЏРІРєР° РІ РїР°РјРµС‚С‚Р°: " + Settings.Default.TactLenght.ToString();
-            label8.Text = "Р’СЂРµРјРµ Р·Р° РІРёР·СѓР°Р»РёР·Р°С†РёСЏ РЅР° РµРґРёРЅ С‚Р°РєС‚: " + (trackBar2.Value * 0.001).ToString();
+            label1.Text = "Честота на генерираните заявки: " + (trackBar1.Value).ToString();
+            label10.Text = "Дължина (брой тактове за обслужване) на една заявка в паметта: " + Settings.Default.TactLenght.ToString();
+            label8.Text = "Време за визуализация на един такт: " + (trackBar2.Value * 0.001).ToString();
             radioButton1_CheckedChanged(sender, e);
             radioButton2_CheckedChanged(sender, e);
 
@@ -114,7 +112,19 @@ namespace CrossbarSwitch
                     pictureBox2.Visible = true;
                 }
             }
-            initializeEmptyRequests();
+            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
+            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
+            List<Memory> memories = new List<Memory>();
+            List<CPU> cpus = new List<CPU>();
+            for (int i = 0; i < m; i++) //инициализира броя памети
+            {
+                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
+            }
+            for (int i = 0; i < n; i++) //инициализира броя памети
+            {
+                cpus.Add(new CPU(i + 1, false, null));
+            }
+            requests = new Requests(cpus, memories);
             lasts = new List<RequestLasts>();
             drawArea = Graphics.FromImage(image);
             deleteN.Clear();
@@ -124,37 +134,39 @@ namespace CrossbarSwitch
             Pen blackPen = new Pen(Color.Black, 1);
             Pen qPen = new Pen(Color.DarkCyan, 1);
 
-            int n = requests.CPUs.Count,
-            m = requests.Memories.Count;
+            int cpu, mem;
+
+            cpu = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
+            mem = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
 
 
-            if ((n == 0) || (m == 0))
+            if ((cpu == 0) || (mem == 0))
             {
                 if (Settings.Default.AutoMode && string.IsNullOrEmpty(textBox1.Text))
                 {
-                    MessageBox.Show("Р’СЉРІРµРґРµС‚Рµ СЂР°Р·РјРµСЂРЅРѕСЃС‚ РЅР° РјСЂРµР¶Р°С‚Р° Рё РІСЂРµРјРµ Р·Р° РјРѕРґРµР»РёСЂР°РЅРµ!", "РќРµРєРѕСЂРµРєС‚РЅРё РІС…РѕРґРЅРё РґР°РЅРЅРё!");
+                    MessageBox.Show("Въведете размерност на мрежата и време за моделиране!", "Некоректни входни данни!");
                 }
                 else
                 {
-                    MessageBox.Show("Р’СЉРІРµРґРµС‚Рµ СЂР°Р·РјРµСЂРЅРѕСЃС‚ РЅР° РјСЂРµР¶Р°С‚Р°!", "РќРµРєРѕСЂРµРєС‚РЅРё РІС…РѕРґРЅРё РґР°РЅРЅРё!");
+                    MessageBox.Show("Въведете размерност на мрежата!", "Некоректни входни данни!");
                 }
             }
             else
             {
-                int x = requests.CPUs.Count == 32 ? 30 : 50; // СЂР°Р·СЃС‚РѕСЏРЅРёРµС‚Рѕ РІ СЂРµС€РµС‚РєР°С‚Р° Рј/Сѓ Рї-СЃРѕСЂРёС‚Рµ
+                int x = requests.CPUs.Count == 32 ? 30 : 50; // разстоянието в решетката м/у п-сорите
                 int x0 = 50;
                 int y0 = 50;
-                int y = 100; // СЂР°Р·СЃС‚РѕСЏРЅРёРµС‚Рѕ РІ СЂРµС€РµС‚РєР°С‚Р° Рј/Сѓ РјРѕРґСѓР»РёС‚Рµ РїР°РјРµС‚
+                int y = 100; // разстоянието в решетката м/у модулите памет
                 Font drawFont = new Font("Arial Narrow", 13);
                 SolidBrush drawBrush = new SolidBrush(Color.MediumVioletRed);
-                for (int i = 0; i < n; i++) //СЂРёСЃСѓРІР° С…РѕСЂРёР·РѕРЅС‚Р°Р»РЅРё Р»РёРЅРёРё
+                for (int i = 0; i < n; i++) //рисува хоризонтални линии
                 {
                     drawArea.DrawLine(blackPen, x0, y0 + x / 2 + i * x, x0 + m * y - y / 2, y0 + x / 2 + i * x);
                     drawArea.DrawString("CPU" + (i + 1).ToString(), drawFont, drawBrush, 0, y0 + i * x);
                     drawArea.DrawRectangle(qPen, x0 + m * y - y / 4, y0 + i * x, 60, 25);
 
 
-                    for (int j = 0; j < m; j++) //СЂРёСЃСѓРІР° РІРµСЂС‚РёРєР°Р»РЅРё Р»РёРЅРёРё
+                    for (int j = 0; j < m; j++) //рисува вертикални линии
                     {
                         drawArea.DrawLine(blackPen, x0 + y / 2 + j * y, y0, x0 + y / 2 + j * y, y0 + n * x - x / 2);
                         drawArea.DrawString("M" + (j + 1).ToString(), drawFont, drawBrush, y / 2 + x0 - 10 + j * y, y0 - 30);
@@ -248,8 +260,8 @@ namespace CrossbarSwitch
             }
             requests.Tact++;
             if (InvokeRequired)
-                label11.Invoke((MethodInvoker)(() => label11.Text = requests.Tact.ToString() + ". С‚Р°РєС‚"));
-            else label11.Text = requests.Tact.ToString() + ". С‚Р°РєС‚";
+                label11.Invoke((MethodInvoker)(() => label11.Text = requests.Tact.ToString() + ". такт"));
+            else label11.Text = requests.Tact.ToString() + ". такт";
 
 
 
@@ -277,7 +289,6 @@ namespace CrossbarSwitch
                         int stepsCounter = 0;
                         trackBar1.Enabled = false;
                         trackBar3.Enabled = false;
-                        button4.Enabled = false;
                         pictureBox2.Visible = true;
                         bool isStopped = false;
                         button9.Visible = true;
@@ -293,7 +304,7 @@ namespace CrossbarSwitch
                         } while (stepsCounter < x && !isStopped);
                         drawArea.Clear(pictureBox2.BackColor); pictureBox2.Invalidate();
                     }
-                    else { MessageBox.Show("Р’СЉРІРµРґРµС‚Рµ РІСЂРµРјРµ Р·Р° РјРѕРґРµР»РёСЂР°РЅРµ!", "РќРµРєРѕСЂРµРєС‚РЅРё РІС…РѕРґРЅРё РґР°РЅРЅРё!"); }
+                    else { MessageBox.Show("Въведете време за моделиране!", "Некоректни входни данни!"); }
                 }
                 else
                 {
@@ -301,11 +312,10 @@ namespace CrossbarSwitch
                 }
                 trackBar1.Enabled = true;
                 trackBar3.Enabled = true;
-                button4.Enabled = true;
                 label2.Text = "0 /";
 
             }
-            else { MessageBox.Show("Р’СЉРІРµРґРµС‚Рµ РІСЂРµРјРµ Р·Р° РјРѕРґРµР»РёСЂР°РЅРµ!", "РќРµРєРѕСЂРµРєС‚РЅРё РІС…РѕРґРЅРё РґР°РЅРЅРё!"); }
+            else { MessageBox.Show("Въведете време за моделиране!", "Некоректни входни данни!"); }
         }
 
         private void button4_Click_1(object sender, EventArgs e)
@@ -332,16 +342,26 @@ namespace CrossbarSwitch
             {
                 backgroundWorker1.RunWorkerAsync();
             }
+            button7.Visible = true;
+            textBox1.Enabled = true;
+            comboBox3.Enabled = true;
+            comboBox4.Enabled = true;
+            checkBox1.Enabled = true;
+            trackBar2.Enabled = true;
+            button3.Enabled = true;
+            button7.Enabled = true;
+            dataGridView1.Enabled = false;
+            dataGridView1.Visible = true;
         }
 
-        private void button5_Click(object sender, EventArgs e) // РёР·С…РѕРґ
+        private void button5_Click(object sender, EventArgs e) // изход
         {
             this.Close();
         }
 
         private void button6_Click(object sender, EventArgs e)
         {
-            MessageBox.Show("В© 2022 Р“РµРѕСЂРіРё Р“РµРѕСЂРіРёРµРІ.\n\nmaymi5@abv.bg\n___________________________\n РўРЈ-Р’Р°СЂРЅР°", "Product licence information");
+            MessageBox.Show("© 2022 Георги Георгиев.\n\nmaymi5@abv.bg\n___________________________\n ТУ-Варна", "Product licence information");
         }
 
         private void button7_Click_1(object sender, EventArgs e)
@@ -376,7 +396,7 @@ namespace CrossbarSwitch
             Settings.Default.Save();
             Settings.Default.Upgrade();
 
-            label1.Text = "Р§РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё: " + (Settings.Default.GenReq).ToString();
+            label1.Text = "Честота на генерираните заявки: " + (Settings.Default.GenReq).ToString();
         }
 
         private void trackBar3_Scroll_1(object sender, EventArgs e)
@@ -384,7 +404,7 @@ namespace CrossbarSwitch
             Settings.Default.TactLenght = trackBar3.Value;
             Settings.Default.Save();
             Settings.Default.Upgrade();
-            label10.Text = "Р”СЉР»Р¶РёРЅР° (Р±СЂРѕР№ С‚Р°РєС‚РѕРІРµ Р·Р° РѕР±СЃР»СѓР¶РІР°РЅРµ) РЅР° РµРґРЅР° Р·Р°СЏРІРєР° РІ РїР°РјРµС‚С‚Р°: " + Settings.Default.TactLenght.ToString();
+            label10.Text = "Дължина (брой тактове за обслужване) на една заявка в паметта: " + Settings.Default.TactLenght.ToString();
         }
 
         private void trackBar2_Scroll_1(object sender, EventArgs e)
@@ -409,7 +429,7 @@ namespace CrossbarSwitch
             Settings.Default.TrackBar2 = trackBar2.Value;
             Settings.Default.Save();
             Settings.Default.Upgrade();
-            label8.Text = "Р’СЂРµРјРµ Р·Р° РІРёР·СѓР°Р»РёР·Р°С†РёСЏ РЅР° РµРґРёРЅ С‚Р°РєС‚: " + (x / 1000).ToString();
+            label8.Text = "Време за визуализация на един такт: " + (x / 1000).ToString();
         }
 
         private void radioButton1_CheckedChanged(object sender, EventArgs e)
@@ -515,7 +535,7 @@ namespace CrossbarSwitch
 
         private void procedureBeforeGeneratingRequest(int memoryId)
         {
-            if (Settings.Default.StepMode || Settings.Default.Visualisation)
+            if (Settings.Default.Visualisation)
             {
                 generateRequests(memoryId);
             }
@@ -537,43 +557,43 @@ namespace CrossbarSwitch
                     series.Points.Clear();
                     series.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.Line;
                     series.BorderWidth = 3;
-                    series.Name = "Р‘СЂРѕР№ Р·Р°РµС‚Рё РїР°РјРµС‚Рё СЃРїСЂСЏРјРѕ С‡РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё";
+                    series.Name = "Брой заети памети спрямо честота на генерираните заявки";
                 }
 
 
                 //chart1.ChartAreas[0].AxisY.Minimum = -2;
-                this.chart1.Series["Р‘СЂРѕР№ Р·Р°РµС‚Рё РїР°РјРµС‚Рё СЃРїСЂСЏРјРѕ С‡РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё"].Points.DataBindXY(PX, BY);
+                this.chart1.Series["Брой заети памети спрямо честота на генерираните заявки"].Points.DataBindXY(PX, BY);
 
                 chart1.Legends[0].Title = " ";
-                chart1.ChartAreas[0].AxisX.Title = "Р§РµСЃС‚РѕС‚Р°(p)";
-                chart1.ChartAreas[0].AxisY.Title = "РџР°РјРµС‚Рё";
-                chart1.SaveImage("Р“СЂР°С„РёРєР° СЃСЂРµРґРЅР° С€РёСЂРѕС‡РёРЅР° РЅР° Р»РµРЅС‚Р°С‚Р° РЅР° РїСЂРѕРїСѓСЃРєР°РЅРµ.png", System.Drawing.Imaging.ImageFormat.Png);
+                chart1.ChartAreas[0].AxisX.Title = "Честота(p)";
+                chart1.ChartAreas[0].AxisY.Title = "Памети";
+                chart1.SaveImage("Графика средна широчина на лентата на пропускане.png", System.Drawing.Imaging.ImageFormat.Png);
 
 
                 foreach (var series in chart1.Series)
                 {
                     series.Points.Clear();
-                    series.Name = "Р‘СЂРѕР№ С‚Р°РєС‚РѕРІРµ РЅСѓР¶РЅРё Р·Р° РѕСЃР»СѓР¶РІР°РЅРµ РЅР° РµРґРЅР° Р·Р°СЏРІРєР° СЃРїСЂСЏРјРѕ С‡РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё";
+                    series.Name = "Брой тактове нужни за ослужване на една заявка спрямо честота на генерираните заявки";
                 }
-                this.chart1.Series["Р‘СЂРѕР№ С‚Р°РєС‚РѕРІРµ РЅСѓР¶РЅРё Р·Р° РѕСЃР»СѓР¶РІР°РЅРµ РЅР° РµРґРЅР° Р·Р°СЏРІРєР° СЃРїСЂСЏРјРѕ С‡РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё"].Points.DataBindXY(PX, LY);
+                this.chart1.Series["Брой тактове нужни за ослужване на една заявка спрямо честота на генерираните заявки"].Points.DataBindXY(PX, LY);
 
                 chart1.Legends[0].Title = " ";
-                chart1.ChartAreas[0].AxisX.Title = "Р§РµСЃС‚РѕС‚Р°(p)";
-                chart1.ChartAreas[0].AxisY.Title = "РўР°РєС‚РѕРІРµ";
-                chart1.SaveImage("Р“СЂР°С„РёРєР° СЃСЂРµРґРЅР° Р»Р°С‚РµРЅС‚РЅРѕСЃС‚.png", System.Drawing.Imaging.ImageFormat.Png);
+                chart1.ChartAreas[0].AxisX.Title = "Честота(p)";
+                chart1.ChartAreas[0].AxisY.Title = "Тактове";
+                chart1.SaveImage("Графика средна латентност.png", System.Drawing.Imaging.ImageFormat.Png);
                 //Results();
                 PX = new List<int>();
 
-                if (MessageBox.Show("Р“СЂР°С„РёРєРёС‚Рµ Р±СЏС…Р° СЃСЉР·РґР°РґРµРЅРё, РёСЃРєР°С‚Рµ Р»Рё РґР° Р±СЉРґР°С‚ РѕС‚РІРѕСЂРµРЅРё?", "РР·С…РѕРґРЅРё СЂРµР·СѓР»С‚Р°С‚Рё", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK)
+                if (MessageBox.Show("Графиките бяха създадени, искате ли да бъдат отворени?", "Изходни резултати", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK)
                 {
-                    //System.Diagnostics.Process.Start(@"РР·С…РѕРґРЅРё СЂРµР·СѓР»С‚Р°С‚Рё.txt");
-                    System.Diagnostics.Process.Start(@"Р“СЂР°С„РёРєР° СЃСЂРµРґРЅР° С€РёСЂРѕС‡РёРЅР° РЅР° Р»РµРЅС‚Р°С‚Р° РЅР° РїСЂРѕРїСѓСЃРєР°РЅРµ.png");
-                    System.Diagnostics.Process.Start(@"Р“СЂР°С„РёРєР° СЃСЂРµРґРЅР° Р»Р°С‚РµРЅС‚РЅРѕСЃС‚.png");
+                    //System.Diagnostics.Process.Start(@"Изходни резултати.txt");
+                    System.Diagnostics.Process.Start(@"Графика средна широчина на лентата на пропускане.png");
+                    System.Diagnostics.Process.Start(@"Графика средна латентност.png");
                 }
             }
         }
 
-        private void generateRequests(int memoryId) // РїСЂРѕС†РµСЃРѕСЂ n РіРµРЅРµСЂРёСЂР° Р·Р°СЏРІРєР°
+        private void generateRequests(int memoryId) // процесор n генерира заявка
         {
             Pen redPen = new Pen(Color.Red, 3);
             Pen greenPen = new Pen(Color.Green, 3);
@@ -585,8 +605,8 @@ namespace CrossbarSwitch
 
             int x0 = 50;
             int y0 = 50;
-            int x = requests.CPUs.Count == 32 ? 30 : 50; // СЂР°Р·СЃС‚РѕСЏРЅРёРµС‚Рѕ РІ СЂРµС€РµС‚РєР°С‚Р° Рј/Сѓ Рї-СЃРѕСЂРёС‚Рµ
-            int y = 100; // СЂР°Р·СЃС‚РѕСЏРЅРёРµС‚Рѕ РІ СЂРµС€РµС‚РєР°С‚Р° Рј/Сѓ РјРѕРґСѓР»РёС‚Рµ РїР°РјРµС‚
+            int x = requests.CPUs.Count == 32 ? 30 : 50; // разстоянието в решетката м/у п-сорите
+            int y = 100; // разстоянието в решетката м/у модулите памет
 
             int n = requests.Memories[memoryId].WaitingProcessors[0];
             drawArea.DrawLine(greenPen, x0, y0 + x / 2 + n * x, x0 + memoryId * y + y / 2, y0 + x / 2 + n * x);
@@ -600,7 +620,7 @@ namespace CrossbarSwitch
             deleteM.Enqueue(memoryId);
             deleteN.Enqueue(n);
 
-            if (requests.Memories[memoryId].WaitingProcessors.Count > 1) // Р°РєРѕ РёРјР° РєРѕРЅС„Р»РёРєС‚
+            if (requests.Memories[memoryId].WaitingProcessors.Count > 1) // ако има конфликт
             {
                 n = requests.Memories[memoryId].WaitingProcessors[requests.Memories[memoryId].WaitingProcessors.Count - 1];
 
@@ -643,8 +663,8 @@ namespace CrossbarSwitch
 
             int x0 = 50;
             int y0 = 50;
-            int x = requests.CPUs.Count == 32 ? 30 : 50; // СЂР°Р·СЃС‚РѕСЏРЅРёРµС‚Рѕ РІ СЂРµС€РµС‚РєР°С‚Р° Рј/Сѓ Рї-СЃРѕСЂРёС‚Рµ
-            int y = 100; // СЂР°Р·СЃС‚РѕСЏРЅРёРµС‚Рѕ РІ СЂРµС€РµС‚РєР°С‚Р° Рј/Сѓ РјРѕРґСѓР»РёС‚Рµ РїР°РјРµС‚
+            int x = requests.CPUs.Count == 32 ? 30 : 50; // разстоянието в решетката м/у п-сорите
+            int y = 100; // разстоянието в решетката м/у модулите памет
             drawArea.DrawLine(delPen, x0, y0 + x / 2 + n * x, x0 + m * y + y / 2, y0 + x / 2 + n * x);
             drawArea.DrawLine(delPen, x0 + m * y + y / 2, y0 + 0, x0 + m * y + y / 2, y0 + x / 2 + n * x);
             R.X = x0 + m * y + y / 2 - 3;
@@ -652,7 +672,7 @@ namespace CrossbarSwitch
             R.Width = 6;
             R.Height = 6;
             drawArea.DrawPie(delPen, R, 0, 360);
-            drawArea.FillRectangle(delBrush, new Rectangle(x0 + m * y, 20 + y0 + n1 * x, 100, 20)); // РёР·С‚СЂРёРІР° РїСЂРёРµС‚Р° Р·Р°СЏРІРєР° (РіСЂР°С„.)
+            drawArea.FillRectangle(delBrush, new Rectangle(x0 + m * y, 20 + y0 + n1 * x, 100, 20)); // изтрива приета заявка (граф.)
             drawArea.DrawLine(blackPen, x0, y0 + x / 2 + n * x, x0 + m * y + y / 2 + (m + 1 == requests.Memories.Count ? 0 : 4), y0 + x / 2 + n * x);
             drawArea.DrawLine(blackPen, x0 + m * y + y / 2, y0 + 0, x0 + m * y + y / 2, y0 + x / 2 + n * x + (n + 1 == n1 ? 0 : 4));
 
@@ -669,23 +689,6 @@ namespace CrossbarSwitch
             pictureBox2.Invalidate();
         }
 
-        private void initializeEmptyRequests()
-        {
-            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
-            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
-            memories = new List<Memory>();
-            cpus = new List<CPU>();
-            for (int i = 0; i < m; i++) //РёРЅРёС†РёР°Р»РёР·РёСЂР° Р±СЂРѕСЏ РїР°РјРµС‚Рё
-            {
-                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
-            }
-            for (int i = 0; i < n; i++) //РёРЅРёС†РёР°Р»РёР·РёСЂР° Р±СЂРѕСЏ РїР°РјРµС‚Рё
-            {
-                cpus.Add(new CPU(i + 1, false, null));
-            }
-            requests = new Requests(cpus, memories);
-        }
-
         #endregion
 
         #region BackGroundWorkers
@@ -693,8 +696,20 @@ namespace CrossbarSwitch
         private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
         {
             int p = 0, stepsCounter = 0;
-            initializeEmptyRequests();
+            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
+            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
+            List<Memory> memories = new List<Memory>();
+            List<CPU> cpus = new List<CPU>();
+            for (int i = 0; i < m; i++) //initialize memory count
+            {
+                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
+            }
+            for (int i = 0; i < n; i++) // initialize processor count
+            {
+                cpus.Add(new CPU(i + 1, false, null));
+            }
             lasts = new List<RequestLasts>();
+            requests = new Requests(cpus, memories);
             BY = new List<double>();
             LY = new List<double>();
             PX = new List<int>();
@@ -749,11 +764,11 @@ namespace CrossbarSwitch
                         else dataGridView1.Rows.Add(input);
                         memories = new List<Memory>();
                         cpus = new List<CPU>();
-                        for (int i = 0; i < requests.Memories.Count; i++) //РёРЅРёС†РёР°Р»РёР·РёСЂР° Р±СЂРѕСЏ РїР°РјРµС‚Рё
+                        for (int i = 0; i < m; i++) //инициализира броя памети
                         {
                             memories.Add(new Memory(i + 1, 0, false, new List<int>()));
                         }
-                        for (int i = 0; i < requests.CPUs.Count; i++) //РёРЅРёС†РёР°Р»РёР·РёСЂР° Р±СЂРѕСЏ РїР°РјРµС‚Рё
+                        for (int i = 0; i < n; i++) //инициализира броя памети
                         {
                             cpus.Add(new CPU(i + 1, false, null));
                         }
@@ -773,11 +788,23 @@ namespace CrossbarSwitch
         private void backgroundWorker2_DoWork(object sender, DoWorkEventArgs e)
         {
             int stepsCounter = 0;
-            initializeEmptyRequests();
+            int n = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
+            int m = (Settings.Default.StepMode) ? Settings.Default.ComboBox2 : Settings.Default.ComboBox4;
+            List<Memory> memories = new List<Memory>();
+            List<CPU> cpus = new List<CPU>();
+            for (int i = 0; i < m; i++) //инициализира броя памети
+            {
+                memories.Add(new Memory(i + 1, 0, false, new List<int>()));
+            }
+            for (int i = 0; i < n; i++) //инициализира броя памети
+            {
+                cpus.Add(new CPU(i + 1, false, null));
+            }
             lasts = new List<RequestLasts>();
             backgroundWorker2.ReportProgress(Settings.Default.GenReq);
-            int time = Settings.Default.StepMode ? 100 : int.Parse(Settings.Default.ModTime);
+            int time = Settings.Default.StepMode ? requests.Tact : int.Parse(Settings.Default.ModTime);
             button1_Click(sender, e);
+            requests = new Requests(cpus, memories);
             while (stepsCounter < time)
             {
                 button2_Click(sender, e);
@@ -809,7 +836,7 @@ namespace CrossbarSwitch
             {
                 label16.Visible = false;
             }
-            label16.Text = "РџСЂР°РІСЏС‚ СЃРµ РёР·С‡РёСЃР»РµРЅРёСЏ СЃ С‡РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё: " + e.ProgressPercentage.ToString();
+            label16.Text = "Правят се изчисления с честота на генерираните заявки: " + e.ProgressPercentage.ToString();
         }
 
         private void backgroundWorker1_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
@@ -835,23 +862,13 @@ namespace CrossbarSwitch
                 dataGridView1.Enabled = true;
                 pictureBox1.Visible = false;
                 label16.Visible = false;
-                textBox1.Enabled = true;
-                comboBox3.Enabled = true;
-                comboBox4.Enabled = true;
-                checkBox1.Enabled = true;
-                trackBar2.Enabled = true;
-                button3.Enabled = true;
-                button7.Visible = true;
-                button7.Enabled = true;
-                dataGridView1.Enabled = false;
-                dataGridView1.Visible = true;
             }
         }
 
         private void backgroundWorker2_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
             label16.Visible = true;
-            label16.Text = "РџСЂР°РІСЏС‚ СЃРµ РёР·С‡РёСЃР»РµРЅРёСЏ СЃ С‡РµСЃС‚РѕС‚Р° РЅР° РіРµРЅРµСЂРёСЂР°РЅРёС‚Рµ Р·Р°СЏРІРєРё: " + e.ProgressPercentage.ToString();
+            label16.Text = "Правят се изчисления с честота на генерираните заявки: " + e.ProgressPercentage.ToString();
         }
 
         #endregion
