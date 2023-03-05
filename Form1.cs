@@ -57,7 +57,7 @@ namespace CrossbarSwitch
         Requests requests;
         List<RequestLasts> lasts;
         int globalP;
-        List<double> BY, LY;
+        List<double> BY, LY; // variables responsible for the graphs 
         List<int> PX;
         List<Memory> memories;
         List<CPU> cpus;
@@ -205,16 +205,9 @@ namespace CrossbarSwitch
                 }
             }
 
-
-
             double p = ((!Settings.Default.Visualisation && Settings.Default.AutoMode) ? globalP : Settings.Default.GenReq) * 0.1;
-            int B;
 
-            B = requests.Memories.AsQueryable().Where(m => m.Busy == true).Count();
-
-            //L = Convert.ToInt32((1 - pA) / pA);
-            Breadth.Enqueue(B);
-            //Latency.Enqueue(L);
+            Breadth.Enqueue(requests.Memories.AsQueryable().Where(m => m.Busy == true).Count());
             t.Enqueue(getSteps() + 1);
 
             for (int i = 0; i < memCount; i++)
@@ -231,7 +224,7 @@ namespace CrossbarSwitch
                         int cpuId = requests.Memories[i].WaitingProcessors[0];
                         requests.CPUs[cpuId].Busy = false;
                         lasts.AsQueryable().Where(l => l.CPUId == cpuId && l.Done == false).Single().Done = true;
-                        if (Settings.Default.Visualisation)
+                        if (Settings.Default.Visualisation || Settings.Default.StepMode)
                         {
                             deleteRequests(i);
                         }
@@ -247,12 +240,10 @@ namespace CrossbarSwitch
 
             }
             requests.Tact++;
+
             if (InvokeRequired)
                 label11.Invoke((MethodInvoker)(() => label11.Text = requests.Tact.ToString() + ". такт"));
             else label11.Text = requests.Tact.ToString() + ". такт";
-
-
-
         }
 
         private void button3_Click(object sender, EventArgs e)
@@ -279,8 +270,8 @@ namespace CrossbarSwitch
                         trackBar3.Enabled = false;
                         button4.Enabled = false;
                         pictureBox2.Visible = true;
-                        bool isStopped = false;
                         button9.Visible = true;
+                        bool isStopped;
                         do
                         {
                             Thread.Sleep(trackBar2.Value);
@@ -322,8 +313,11 @@ namespace CrossbarSwitch
             checkBox1.Enabled = false;
             trackBar2.Enabled = false;
             button3.Enabled = false;
+            button4.Enabled = false;
             button7.Enabled = false;
             button9.Enabled = true;
+            dataGridView1.Enabled = false;
+            dataGridView1.Visible = true;
             if (Settings.Default.StepMode || (Settings.Default.AutoMode && Settings.Default.Visualisation) && !backgroundWorker2.IsBusy)
             {
                 backgroundWorker2.RunWorkerAsync();
@@ -361,8 +355,6 @@ namespace CrossbarSwitch
         {
             HelpForm helpForm = new HelpForm();
             helpForm.ShowDialog();
-
-
         }
 
         private void button9_Click(object sender, EventArgs e)
@@ -513,6 +505,27 @@ namespace CrossbarSwitch
 
         #region Basic Functions
 
+        private void EnableFormControls()
+        {
+            panel2.Enabled = true;
+            panel3.Enabled = true;
+            dataGridView1.Enabled = true;
+            pictureBox1.Visible = false;
+            label16.Visible = false;
+            textBox1.Enabled = true;
+            comboBox3.Enabled = true;
+            comboBox4.Enabled = true;
+            checkBox1.Enabled = true;
+            trackBar2.Enabled = true;
+            button3.Enabled = true;
+            button4.Enabled = true;
+            button7.Visible = true;
+            button7.Enabled = true;
+            button9.Visible = false;
+            dataGridView1.Enabled = false;
+            dataGridView1.Visible = true;
+        }
+
         private void procedureBeforeGeneratingRequest(int memoryId)
         {
             if (Settings.Default.StepMode || Settings.Default.Visualisation)
@@ -541,8 +554,7 @@ namespace CrossbarSwitch
                 }
 
 
-                //chart1.ChartAreas[0].AxisY.Minimum = -2;
-                this.chart1.Series["Брой заети памети спрямо честота на генерираните заявки"].Points.DataBindXY(PX, BY);
+                chart1.Series["Брой заети памети спрямо честота на генерираните заявки"].Points.DataBindXY(PX, BY);
 
                 chart1.Legends[0].Title = " ";
                 chart1.ChartAreas[0].AxisX.Title = "Честота(p)";
@@ -555,20 +567,18 @@ namespace CrossbarSwitch
                     series.Points.Clear();
                     series.Name = "Брой тактове нужни за ослужване на една заявка спрямо честота на генерираните заявки";
                 }
-                this.chart1.Series["Брой тактове нужни за ослужване на една заявка спрямо честота на генерираните заявки"].Points.DataBindXY(PX, LY);
+                chart1.Series["Брой тактове нужни за ослужване на една заявка спрямо честота на генерираните заявки"].Points.DataBindXY(PX, LY);
 
                 chart1.Legends[0].Title = " ";
                 chart1.ChartAreas[0].AxisX.Title = "Честота(p)";
                 chart1.ChartAreas[0].AxisY.Title = "Тактове";
                 chart1.SaveImage("Графика средна латентност.png", System.Drawing.Imaging.ImageFormat.Png);
-                //Results();
                 PX = new List<int>();
 
                 if (MessageBox.Show("Графиките бяха създадени, искате ли да бъдат отворени?", "Изходни резултати", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK)
                 {
-                    //System.Diagnostics.Process.Start(@"Изходни резултати.txt");
-                    System.Diagnostics.Process.Start(@"Графика средна широчина на лентата на пропускане.png");
-                    System.Diagnostics.Process.Start(@"Графика средна латентност.png");
+                    Process.Start(@"Графика средна широчина на лентата на пропускане.png");
+                    Process.Start(@"Графика средна латентност.png");
                 }
             }
         }
@@ -579,7 +589,7 @@ namespace CrossbarSwitch
             Pen greenPen = new Pen(Color.Green, 3);
             Font drawFont = new Font("Arial Narrow", 13);
             SolidBrush drawBrush = new SolidBrush(Color.DarkCyan);
-            int n1, n2;
+            int n1;
 
             n1 = (Settings.Default.StepMode) ? Settings.Default.ComboBox1 : Settings.Default.ComboBox3;
 
@@ -684,6 +694,26 @@ namespace CrossbarSwitch
                 cpus.Add(new CPU(i + 1, false, null));
             }
             requests = new Requests(cpus, memories);
+            lasts = new List<RequestLasts>();
+            Breadth.Clear();
+        }
+
+        private void AddRowToDataGridView(int p, double bAvr, List<RequestLasts> lasts, double lAvr)
+        {
+            lasts.Sort((u, y) => u.TactsLast.CompareTo(y.TactsLast));
+
+            var input = new object[] { p,
+                            bAvr,
+                            lasts.AsQueryable().Count(),
+                            lasts.AsQueryable().Where(l => l.Done).Count(),
+                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).First().TactsLast,
+                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).Last().TactsLast,
+                            lAvr };
+
+            if (this.InvokeRequired)
+                dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Add(input)));
+            else
+                dataGridView1.Rows.Add(input);
         }
 
         #endregion
@@ -693,79 +723,49 @@ namespace CrossbarSwitch
         private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
         {
             int p = 0, stepsCounter = 0;
-            initializeEmptyRequests();
-            lasts = new List<RequestLasts>();
-            BY = new List<double>();
-            LY = new List<double>();
-            PX = new List<int>();
+            bool isStopped = false;
+            BY    = new List<double>();
+            LY    = new List<double>();
+            PX    = new List<int>();
+
+            initializeEmptyRequests();// new empty requests object with correct count of CPUs and memories
+            button1_Click(sender, e);
             backgroundWorker1.ReportProgress(p + 1);// passes out the progress about the simulation
 
-            button1_Click(sender, e);
-            bool isStopped = false;
             if (InvokeRequired)
                 button9.Invoke((MethodInvoker)(() => button9.Visible = true));
             else button9.Visible = true;
+
             do
             {
-                var sw = Stopwatch.StartNew();
-                try
-                {
-                    globalP = p + 1;
-                    if (InvokeRequired)
-                        button9.Invoke((MethodInvoker)(() => isStopped = button9.Visible ? false : true));
-                    else isStopped = button9.Visible ? false : true;
-                    button2_Click(sender, e);
-                    stepsCounter++;
-                    int time = int.Parse(Settings.Default.ModTime);
-                    if (stepsCounter == time)
-                    {
-                        p++;
-                        backgroundWorker1.ReportProgress(p + 1);
-                        stepsCounter = 0;
-                        lasts.Sort((u, y) => u.TactsLast.CompareTo(y.TactsLast));
-                        double bAvr = Math.Round((double)Breadth.AsQueryable().Average(), 2);
-                        double lAvr;
-                        if (lasts.Count <= 0)
-                        {
-                            lAvr = 0.0;
-                        }
-                        else
-                        {
-                            lAvr = Math.Round((double)lasts?.AsQueryable().Average(item => item.TactsLast), 2);
-                        }
-                        PX.Add(p);
-                        BY.Add(bAvr);
-                        LY.Add(lAvr);
+                globalP = p + 1;
+                stepsCounter++;
+                int time = int.Parse(Settings.Default.ModTime);
+                button2_Click(sender, e);
 
-                        var input = new object[] { p,
-                                bAvr,
-                                lasts.AsQueryable().Count(),
-                                lasts.AsQueryable().Where(l => l.Done).Count(),
-                                (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).First().TactsLast,
-                                (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).Last().TactsLast,
-                                lAvr };
-                        if (this.InvokeRequired)
-                            dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Add(input)));
-                        else dataGridView1.Rows.Add(input);
-                        memories = new List<Memory>();
-                        cpus = new List<CPU>();
-                        for (int i = 0; i < requests.Memories.Count; i++) //инициализира броя памети
-                        {
-                            memories.Add(new Memory(i + 1, 0, false, new List<int>()));
-                        }
-                        for (int i = 0; i < requests.CPUs.Count; i++) //инициализира броя памети
-                        {
-                            cpus.Add(new CPU(i + 1, false, null));
-                        }
-                        lasts = new List<RequestLasts>();
-                        requests = new Requests(cpus, memories);
-                        Breadth.Clear();
-                    }
-                }
-                finally
+                if (InvokeRequired)
+                    Invoke(new MethodInvoker(() => isStopped = !button9.Visible));
+                else isStopped = !button9.Visible;
+
+                if (stepsCounter == time)
                 {
-                    sw.Stop();
-                    Debug.WriteLine($"Took {sw.ElapsedMilliseconds}");
+                    p++;
+                    stepsCounter = 0;
+                    double bAvr = Math.Round((double)Breadth.AsQueryable().Average(), 2);
+                    double lAvr = 0.0;
+                    backgroundWorker1.ReportProgress(p + 1);
+                        
+                    if (lasts.Count > 0)
+                    {
+                        lAvr = Math.Round((double)lasts?.AsQueryable().Average(item => item.TactsLast), 2);
+                    }
+
+                    PX.Add(p);
+                    BY.Add(bAvr);
+                    LY.Add(lAvr);
+
+                    AddRowToDataGridView(p,bAvr,lasts,lAvr);
+                    initializeEmptyRequests();
                 }
             } while (p < 10 && !isStopped);
         }
@@ -773,31 +773,21 @@ namespace CrossbarSwitch
         private void backgroundWorker2_DoWork(object sender, DoWorkEventArgs e)
         {
             int stepsCounter = 0;
-            initializeEmptyRequests();
-            lasts = new List<RequestLasts>();
-            backgroundWorker2.ReportProgress(Settings.Default.GenReq);
             int time = Settings.Default.StepMode ? 100 : int.Parse(Settings.Default.ModTime);
+            initializeEmptyRequests();
             button1_Click(sender, e);
+            backgroundWorker2.ReportProgress(Settings.Default.GenReq);
+
             while (stepsCounter < time)
             {
                 button2_Click(sender, e);
                 stepsCounter++;
                 if (stepsCounter == time)
                 {
-                    lasts.Sort((u, y) => u.TactsLast.CompareTo(y.TactsLast));
-                    var input = new object[] { Settings.Default.GenReq,
-                            Math.Round((double)Breadth.AsQueryable().Average(), 2),
-                            lasts.AsQueryable().Count(),
-                            lasts.AsQueryable().Where(l => l.Done).Count(),
-                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).First().TactsLast,
-                            (lasts.Count <= 0) ? 0 :lasts.AsQueryable().Where(l => l.Done).Last().TactsLast,
-                            (lasts.Count <= 0) ? 0 : Math.Round((double)lasts.AsQueryable().Average(item => item.TactsLast), 2) };
-                    if (this.InvokeRequired)
-                        dataGridView1.Invoke((MethodInvoker)(() => dataGridView1.Rows.Add(input)));
-                    else dataGridView1.Rows.Add(input);
-                    lasts = new List<RequestLasts>();
-                    requests = new Requests(cpus, memories);
-                    Breadth.Clear();
+                    AddRowToDataGridView(Settings.Default.GenReq,
+                        Math.Round((double)Breadth.AsQueryable().Average(), 2),
+                        lasts,
+                        (lasts.Count <= 0) ? 0 : Math.Round((double)lasts.AsQueryable().Average(item => item.TactsLast), 2));
                 }
             }
         }
@@ -816,11 +806,7 @@ namespace CrossbarSwitch
         {
             if (e.Error == null)
             {
-                panel2.Enabled = true;
-                panel3.Enabled = true;
-                dataGridView1.Enabled = true;
-                pictureBox1.Visible = false;
-                label16.Visible = false;
+                EnableFormControls();
                 DisplayChart();
             }
 
@@ -830,21 +816,7 @@ namespace CrossbarSwitch
         {
             if (e.Error == null)
             {
-                panel2.Enabled = true;
-                panel3.Enabled = true;
-                dataGridView1.Enabled = true;
-                pictureBox1.Visible = false;
-                label16.Visible = false;
-                textBox1.Enabled = true;
-                comboBox3.Enabled = true;
-                comboBox4.Enabled = true;
-                checkBox1.Enabled = true;
-                trackBar2.Enabled = true;
-                button3.Enabled = true;
-                button7.Visible = true;
-                button7.Enabled = true;
-                dataGridView1.Enabled = false;
-                dataGridView1.Visible = true;
+                EnableFormControls();
             }
         }
 
